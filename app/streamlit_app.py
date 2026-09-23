@@ -1,148 +1,100 @@
-import streamlit as st
-import re
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-from transformers import pipeline
+import sys
+from pathlib import Path
 
+import streamlit as st
+
+
+# --------------------------------------------------
+# Add project root to Python path
+# --------------------------------------------------
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+
+# --------------------------------------------------
+# Import project modules
+# --------------------------------------------------
+
+from src.retrieval import load_embedding_model
+from src.nli_checker import load_nli_model
+from src.pipeline import analyze_answer
+
+
+# --------------------------------------------------
+# Page configuration
+# --------------------------------------------------
 
 st.set_page_config(
-    page_title="Hallucination Checker",
+    page_title="LLM Hallucination Checker",
     page_icon="🔎",
     layout="wide"
 )
 
-st.title("🔎 LLM Hallucination Checker")
-st.write("Check whether an LLM-generated answer is supported by a source document.")
 
-
-# -----------------------------
+# --------------------------------------------------
 # Load models
-# -----------------------------
+# --------------------------------------------------
 
 @st.cache_resource
 def load_models():
 
-    embedding_model = SentenceTransformer(
-        "all-MiniLM-L6-v2"
-    )
+    embedding_model = load_embedding_model()
 
-    nli_model = pipeline(
-        "text-classification",
-        model="cross-encoder/nli-MiniLM2-L6-H768"
-    )
+    nli_model = load_nli_model()
 
     return embedding_model, nli_model
 
 
-embedding_model, nli_model = load_models()
+# --------------------------------------------------
+# Header
+# --------------------------------------------------
+
+st.title("🔎 LLM Hallucination Checker")
+
+st.write(
+    "Check whether an LLM-generated answer is "
+    "supported by a source document."
+)
 
 
-# -----------------------------
-# Claim extraction
-# -----------------------------
+# --------------------------------------------------
+# Input section
+# --------------------------------------------------
 
-def extract_claims(text):
-
-    claims = re.split(
-        r'(?<=[.!?])\s+',
-        text.strip()
-    )
-
-    return [
-        claim.strip()
-        for claim in claims
-        if claim.strip()
-    ]
-
-
-# -----------------------------
-# Source chunking
-# -----------------------------
-
-def create_chunks(text):
-
-    chunks = re.split(
-        r'(?<=[.!?])\s+',
-        text.strip()
-    )
-
-    return [
-        chunk.strip()
-        for chunk in chunks
-        if chunk.strip()
-    ]
-
-
-# -----------------------------
-# Retrieve evidence
-# -----------------------------
-
-def retrieve_evidence(claim, source_chunks):
-
-    claim_embedding = embedding_model.encode([claim])
-
-    chunk_embeddings = embedding_model.encode(
-        source_chunks
-    )
-
-    similarities = cosine_similarity(
-        claim_embedding,
-        chunk_embeddings
-    )[0]
-
-    best_index = similarities.argmax()
-
-    return (
-        source_chunks[best_index],
-        similarities[best_index]
-    )
-
-
-# -----------------------------
-# NLI classification
-# -----------------------------
-
-def check_claim(evidence, claim):
-
-    result = nli_model(
-        f"{evidence} </s></s> {claim}"
-    )
-
-    return result[0]
-
-
-# -----------------------------
-# User input
-# -----------------------------
-
-st.subheader("Source Document")
+st.subheader("📄 Source Document")
 
 source_text = st.text_area(
     "Paste your source document here",
-    height=250
+    height=250,
+    placeholder="Enter the source information..."
 )
 
-st.subheader("LLM Generated Answer")
+
+st.subheader("🤖 LLM Generated Answer")
 
 answer_text = st.text_area(
-    "Paste the LLM-generated answer here",
-    height=200
+    "Paste the generated answer here",
+    height=200,
+    placeholder="Enter the LLM-generated answer..."
 )
 
 
 check_button = st.button(
-    "Check Answer",
+    "🔍 Check Answer",
     type="primary"
 )
 
 
-# -----------------------------
-# Complete pipeline
-# -----------------------------
+# --------------------------------------------------
+# Analysis
+# --------------------------------------------------
 
 if check_button:
 
-    if not source_text or not answer_text:
+    if not source_text.strip() or not answer_text.strip():
 
         st.warning(
             "Please enter both the source document "
@@ -151,142 +103,137 @@ if check_button:
 
     else:
 
-        claims = extract_claims(answer_text)
+        with st.spinner(
+            "Analyzing the answer..."
+        ):
 
-        source_chunks = create_chunks(source_text)
+            embedding_model, nli_model = load_models()
 
-        results = []
-
-        for claim in claims:
-
-            evidence, similarity = retrieve_evidence(
-                claim,
-                source_chunks
+            results, summary = analyze_answer(
+                source_text,
+                answer_text,
+                embedding_model,
+                nli_model
             )
 
-            nli_result = check_claim(
-                evidence,
-                claim
+
+        if not results:
+
+            st.warning(
+                "No claims could be analyzed."
             )
 
-            label = nli_result["label"].upper()
-            confidence = nli_result["score"]
+        else:
 
-            results.append({
-                "claim": claim,
-                "evidence": evidence,
-                "similarity": similarity,
-                "label": label,
-                "confidence": confidence
-            })
+            # ------------------------------------------
+            # Summary
+            # ------------------------------------------
 
-        # -----------------------------
-        # Results Summary
-        # -----------------------------
+            st.subheader("📊 Summary")
 
-        supported = sum(
-            1 for result in results
-            if result["label"] == "ENTAILMENT"
-        )           
-
-        contradicted = sum(
-        1 for result in results
-        if result["label"] == "CONTRADICTION"
-        )
-
-        unsupported = sum(
-            1 for result in results
-            if result["label"] == "NEUTRAL"
-        )
-
-        total = len(results)
-
-        consistency_score = (
-            supported / total * 100
-        )
-
-        st.subheader("📊 Summary")
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            st.metric("Total Claims", total)
-
-        with col2:
-            st.metric("Supported", supported)
-
-        with col3:
-            st.metric("Contradicted", contradicted)
-
-        with col4:
-            st.metric("Unsupported", unsupported)
-
-        st.progress(
-            consistency_score / 100,
-            text=f"Factual Consistency: {consistency_score:.1f}%"
-        )
-
-        st.divider()
-
-        st.subheader("Results")
-        # -----------------------------
-        # Results
-        # -----------------------------
-
-        st.subheader("Results")
-
-        for i, result in enumerate(results, 1):
-
-            st.markdown(f"### Claim {i}")
-
-            st.write(result["claim"])
-
-            st.markdown("**Retrieved Evidence:**")
-
-            st.info(result["evidence"])
-
-            col1, col2 = st.columns(2)
+            col1, col2, col3, col4 = st.columns(4)
 
             with col1:
                 st.metric(
-                    "Similarity",
-                    f"{result['similarity']:.2f}"
+                    "Total Claims",
+                    summary["total"]
                 )
 
             with col2:
                 st.metric(
-                    "NLI Confidence",
-                    f"{result['confidence']:.2f}"
+                    "Supported",
+                    summary["supported"]
                 )
 
-            label = result["label"]
-
-            if label == "ENTAILMENT":
-
-                st.success(
-                    "🟢 Supported by evidence"
+            with col3:
+                st.metric(
+                    "Contradicted",
+                    summary["contradicted"]
                 )
 
-            elif label == "CONTRADICTION":
-
-                st.error(
-                    "🔴 Contradicted by evidence"
-                )
-
-            else:
-
-                st.warning(
-                    "🟡 Not supported by evidence"
+            with col4:
+                st.metric(
+                    "Unsupported",
+                    summary["unsupported"]
                 )
 
 
-        # -----------------------------
-        # Consistency score
-        # -----------------------------
+            # ------------------------------------------
+            # Consistency score
+            # ------------------------------------------
 
-        st.subheader("Overall Consistency")
+            score = summary["consistency_score"]
 
-        st.metric(
-            "Factual Consistency Score",
-            f"{consistency_score:.1f}%"
-        )
+            st.progress(
+                score / 100,
+                text=f"Factual Consistency: {score:.1f}%"
+            )
+
+            st.divider()
+
+
+            # ------------------------------------------
+            # Claim-level results
+            # ------------------------------------------
+
+            st.subheader("🔎 Claim-by-Claim Analysis")
+
+            for i, result in enumerate(
+                results,
+                start=1
+            ):
+
+                st.markdown(
+                    f"### Claim {i}"
+                )
+
+                st.write(
+                    result["claim"]
+                )
+
+                st.markdown(
+                    "**Retrieved Evidence:**"
+                )
+
+                st.info(
+                    result["evidence"]
+                )
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    st.metric(
+                        "Similarity",
+                        f"{result['similarity']:.2f}"
+                    )
+
+                with col2:
+
+                    st.metric(
+                        "NLI Confidence",
+                        f"{result['confidence']:.2f}"
+                    )
+
+
+                label = result["label"]
+
+                if label == "ENTAILMENT":
+
+                    st.success(
+                        "🟢 Supported by evidence"
+                    )
+
+                elif label == "CONTRADICTION":
+
+                    st.error(
+                        "🔴 Contradicted by evidence"
+                    )
+
+                else:
+
+                    st.warning(
+                        "🟡 Not supported by evidence"
+                    )
+
+                st.divider()

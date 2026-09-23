@@ -1,0 +1,1 @@
+Artificial intelligence refers to computer systems designed to perform tasks that normally require human intelligence. Machine learning is a subset of artificial intelligence that enables systems to learn patterns from data.
