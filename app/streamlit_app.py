@@ -563,12 +563,10 @@ render_html(
 # --------------------------------------------------
 # Tabs Navigation
 # --------------------------------------------------
-tab_verify, tab_batch, tab_eval, tab_deploy, tab_about = st.tabs([
+tab_verify, tab_batch, tab_eval = st.tabs([
     "🔍 Verify Any Text / Answer",
     "📂 Bulk / CSV Claim Checker",
-    "📊 Benchmark Dashboard",
-    "🚀 Deployment Guide",
-    "🧠 System Architecture"
+    "📊 Benchmark Dashboard"
 ])
 
 # --------------------------------------------------
@@ -1042,108 +1040,3 @@ with tab_eval:
         )
     else:
         st.info("Run `python -m src.evaluate` to generate the benchmark metrics file.")
-
-# --------------------------------------------------
-# TAB 4: Cloud Deployment Guide
-# --------------------------------------------------
-with tab_deploy:
-    st.markdown("### 🚀 How to Deploy FactCheck AI to the Cloud")
-    st.markdown(
-        "FactCheck AI is lightweight and production-ready. You can deploy it for free using any of the following options:"
-    )
-
-    st.markdown("#### Option 1: Streamlit Community Cloud (Recommended & Free)")
-    st.markdown(
-        """
-        1. **Push your code to GitHub** (already configured on branch `main`).
-        2. Go to **[share.streamlit.io](https://share.streamlit.io)** and log in with your GitHub account.
-        3. Click **"New App"** and select:
-           - **Repository**: `Shivani-22-ai/hallucination-checker`
-           - **Branch**: `main`
-           - **Main file path**: `app/streamlit_app.py`
-        4. In **Advanced Settings → Secrets**, add your Tavily API Key:
-           ```toml
-           TAVILY_API_KEY = "tvly-your-api-key-here"
-           ```
-        5. Click **Deploy**! Your app will be live with a public URL in ~2 minutes.
-        """
-    )
-
-    st.markdown("---")
-    st.markdown("#### Option 2: Hugging Face Spaces (Free)")
-    st.markdown(
-        """
-        1. Create a new Space at **[huggingface.co/spaces](https://huggingface.co/spaces)**.
-        2. Select **Streamlit** as the Space SDK.
-        3. Push this repository to your Hugging Face Space git remote.
-        4. In **Settings → Variables and Secrets**, add `TAVILY_API_KEY`.
-        """
-    )
-
-    st.markdown("---")
-    st.markdown("#### Option 3: Docker / Render / Cloud Run")
-    st.markdown(
-        """
-        Build and run the container locally or on any cloud container host:
-        ```bash
-        # Build Docker image
-        docker build -t factcheck-ai .
-
-        # Run container
-        docker run -p 8501:8501 -e TAVILY_API_KEY="your-key" factcheck-ai
-        ```
-        """
-    )
-
-# --------------------------------------------------
-# TAB 5: System Architecture & NLP Deep Dive
-# --------------------------------------------------
-with tab_about:
-    st.markdown("### 🧠 FactCheck AI — System Architecture")
-    st.markdown(
-        "FactCheck AI implements a modular, high-precision hallucination detection pipeline combining dense neural semantic search with cross-encoder Natural Language Inference."
-    )
-
-    render_html(
-        """
-        <div class="step-grid">
-            <div class="step-card">
-                <div class="step-number">1</div>
-                <div class="step-title">Claim Decomposition</div>
-                <div class="step-desc">Splits compound texts into atomic propositions with grammatical subject preservation.</div>
-            </div>
-            <div class="step-card">
-                <div class="step-number">2</div>
-                <div class="step-title">Live Web Retrieval</div>
-                <div class="step-desc">Queries Tavily API for authoritative real-time web passages with title & URL metadata.</div>
-            </div>
-            <div class="step-card">
-                <div class="step-number">3</div>
-                <div class="step-title">Semantic Ranking</div>
-                <div class="step-desc">MiniLM-L6-v2 dense embeddings compute cosine similarity to rank best evidence.</div>
-            </div>
-            <div class="step-card">
-                <div class="step-number">4</div>
-                <div class="step-title">DeBERTa-v3 NLI</div>
-                <div class="step-desc">Cross-encoder evaluates premise-hypothesis pairs for ENTAILMENT vs CONTRADICTION.</div>
-            </div>
-            <div class="step-card">
-                <div class="step-number">5</div>
-                <div class="step-title">Consensus Engine</div>
-                <div class="step-desc">Multi-source consensus calibration prevents single-source false contradictions.</div>
-            </div>
-        </div>
-        """
-    )
-
-    st.markdown("---")
-    st.markdown("#### 📐 Mathematical Composite Scoring Formula")
-    st.markdown(
-        r"""
-        Evidence candidate passages are ranked using a multi-factor composite scoring function:
-        $$\text{Composite Score} = 0.45 \times \text{Similarity}_{\text{MiniLM}} + 0.40 \times \text{Confidence}_{\text{DeBERTa}} + 0.15 \times \text{Score}_{\text{Tavily}}$$
-        
-        The overall Factual Consistency score represents the percentage of claims verified as factually supported:
-        $$\text{Factual Consistency} = \left( \frac{\text{Supported Claims}}{\text{Total Claims}} \right) \times 100\%$$
-        """
-    )
