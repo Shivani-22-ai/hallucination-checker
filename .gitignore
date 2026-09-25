@@ -6,7 +6,9 @@ __pycache__/
 
 .ipynb_checkpoints/
 
+# Environment and secrets
 .env
+.streamlit/secrets.toml
 
 .DS_Store
 
