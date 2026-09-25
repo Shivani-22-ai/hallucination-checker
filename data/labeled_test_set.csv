@@ -1,0 +1,26 @@
+claim,label
+"The Eiffel Tower was completed in 1889.",supported
+"The Eiffel Tower is located in London.",contradicted
+"Paris is the capital of France.",supported
+"Paris is the capital of Germany.",contradicted
+"The Earth orbits the Sun.",supported
+"The Sun orbits the Earth.",contradicted
+"Water freezes at 0 degrees Celsius at standard atmospheric pressure.",supported
+"Water freezes at 50 degrees Celsius.",contradicted
+"The Pacific Ocean is the largest ocean on Earth.",supported
+"The Atlantic Ocean is the largest ocean on Earth.",contradicted
+"The Great Wall of China is located in China.",supported
+"The Great Wall of China is located in Brazil.",contradicted
+"Mount Everest is the highest mountain above sea level.",supported
+"Mount Everest is located in Australia.",contradicted
+"The James Webb Space Telescope was launched in 2021.",supported
+"The James Webb Space Telescope was launched in 2015.",contradicted
+"Python is a programming language.",supported
+"Python was created by Microsoft.",contradicted
+"HTTP is a protocol used for communication on the web.",supported
+"HTTP is a database management system.",contradicted
+"The Eiffel Tower has exactly 1,247 windows.",unverifiable
+"The Eiffel Tower receives exactly 6,321,456 visitors every year.",unverifiable
+"Paris has exactly 2,183,000 residents as of today.",unverifiable
+"The James Webb Space Telescope discovered exactly 7,432 galaxies in its first year.",unverifiable
+"Python is the most popular programming language in the world.",unverifiable

@@ -3,3 +3,5 @@ sentence-transformers
 scikit-learn
 transformers
 torch
+requests
+python-dotenv
