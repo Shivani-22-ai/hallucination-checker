@@ -558,58 +558,77 @@ tab_verify, tab_batch, tab_eval = st.tabs([
 # TAB 1: Main Dynamic Verification Tool
 # --------------------------------------------------
 with tab_verify:
-    if "input_text_val" not in st.session_state:
-        st.session_state.input_text_val = ""
+    if "user_text_area" not in st.session_state:
+        st.session_state["user_text_area"] = ""
+
+    def set_preset_text(preset_text: str):
+        st.session_state["user_text_area"] = preset_text
+
+    def clear_text_input():
+        st.session_state["user_text_area"] = ""
 
     render_html('<div class="preset-header">💡 Multi-Domain Test Presets (Click to test across domains):</div>')
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-        if st.button("🏛️ History & Architecture\n\n*Eiffel Tower & Capital*", use_container_width=True):
-            st.session_state.input_text_val = (
+        st.button(
+            "🏛️ History & Architecture\n\n*Eiffel Tower & Capital*",
+            use_container_width=True,
+            on_click=set_preset_text,
+            args=(
                 "The Eiffel Tower was completed in 1889 and is located in London. "
-                "Paris is the capital of France."
+                "Paris is the capital of France.",
             )
+        )
 
     with c2:
-        if st.button("🧬 Medicine & Biology\n\n*Penicillin & Heart*", use_container_width=True):
-            st.session_state.input_text_val = (
+        st.button(
+            "🧬 Medicine & Biology\n\n*Penicillin & Heart*",
+            use_container_width=True,
+            on_click=set_preset_text,
+            args=(
                 "Penicillin was discovered by Alexander Fleming in 1928. "
-                "The human heart has 6 chambers and pumps blood throughout the body."
+                "The human heart has 6 chambers and pumps blood throughout the body.",
             )
+        )
 
     with c3:
-        if st.button("🎬 Cinema & Pop Culture\n\n*Oppenheimer & Oscars*", use_container_width=True):
-            st.session_state.input_text_val = (
+        st.button(
+            "🎬 Cinema & Pop Culture\n\n*Oppenheimer & Oscars*",
+            use_container_width=True,
+            on_click=set_preset_text,
+            args=(
                 "The movie Oppenheimer was directed by Christopher Nolan. "
-                "Oppenheimer won the Academy Award for Best Picture in 2024."
+                "Oppenheimer won the Academy Award for Best Picture in 2024.",
             )
+        )
 
     with c4:
-        if st.button("🔬 Astronomy & Physics\n\n*James Webb & Orbit*", use_container_width=True):
-            st.session_state.input_text_val = (
+        st.button(
+            "🔬 Astronomy & Physics\n\n*James Webb & Orbit*",
+            use_container_width=True,
+            on_click=set_preset_text,
+            args=(
                 "The James Webb Space Telescope was launched in 2021. "
-                "The Earth orbits the Sun once every 365.25 days."
+                "The Earth orbits the Sun once every 365.25 days.",
             )
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     user_input = st.text_area(
         "Enter or paste any AI-generated response, article excerpt, or statement to verify:",
-        value=st.session_state.input_text_val,
+        key="user_text_area",
         height=130,
-        placeholder="Type or paste any arbitrary statement across any domain (e.g. 'Albert Einstein won the Nobel Prize in Physics for the photoelectric effect. Marie Curie was born in Poland.')...",
-        key="user_text_area"
+        placeholder="Type or paste any arbitrary statement across any domain (e.g. 'Albert Einstein won the Nobel Prize in Physics for the photoelectric effect. Marie Curie was born in Poland.')..."
     )
 
     col_btn_verify, col_btn_clear = st.columns([5, 1])
     with col_btn_verify:
         verify_clicked = st.button("🚀 Verify Factual Consistency", type="primary", use_container_width=True)
     with col_btn_clear:
-        if st.button("🧹 Clear", use_container_width=True):
-            st.session_state.input_text_val = ""
-            st.rerun()
+        st.button("🧹 Clear", use_container_width=True, on_click=clear_text_input)
 
     if verify_clicked:
         if not user_input.strip():
