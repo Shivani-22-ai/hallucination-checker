@@ -479,29 +479,14 @@ with st.sidebar:
         """
     )
     
-    # Check if API key exists in environment / secrets
-    existing_key = get_tavily_api_key()
-    key_status_text = "🟢 Key Active" if existing_key else "🟡 Key Required"
-    key_status_bg = "#f0fdf4" if existing_key else "#fffbeb"
-    key_status_color = "#166534" if existing_key else "#b45309"
-
     render_html(
-        f"""
-        <div style="background: {key_status_bg}; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; margin: 0.4rem 0 0.8rem 0; display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-size:0.78rem; font-weight:700; color:{key_status_color};">{key_status_text}</span>
-            <span style="font-size:0.74rem; color:#64748b;">Live Web Search</span>
+        """
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 10px; margin: 0.4rem 0 1rem 0; display:flex; align-items:center; gap:6px;">
+            <span style="width:8px; height:8px; border-radius:50%; background:#10b981; display:inline-block;"></span>
+            <span style="font-size:0.78rem; font-weight:700; color:#166534;">DeBERTa-v3 & Tavily Live</span>
         </div>
         """
     )
-
-    custom_tavily_key = st.text_input(
-        "Tavily Search API Key (Optional Override):",
-        type="password",
-        placeholder="tvly-xxxxxxxxxxxx",
-        help="If deploying publicly without .env or Streamlit Secrets, paste your Tavily API key here."
-    )
-
-    active_api_key = custom_tavily_key if custom_tavily_key.strip() else existing_key
 
     st.markdown("---")
     st.markdown("#### ⚙️ Verification Parameters")
@@ -629,8 +614,6 @@ with tab_verify:
     if verify_clicked:
         if not user_input.strip():
             st.warning("⚠️ Please provide text to analyze or select one of the multi-domain presets above.")
-        elif not active_api_key:
-            st.error("⚠️ Tavily Search API Key is missing. Please enter your API key in the sidebar.")
         else:
             with st.spinner("🔍 Decomposing text into atomic claims, querying live web evidence, and ranking NLI inference..."):
                 emb_model, nli_model = load_cached_models()
@@ -639,8 +622,7 @@ with tab_verify:
                     embedding_model=emb_model,
                     nli_model=nli_model,
                     confidence_threshold=confidence_thresh,
-                    max_results=max_search_results,
-                    api_key=active_api_key
+                    max_results=max_search_results
                 )
 
             if not results:
@@ -887,8 +869,6 @@ with tab_batch:
     if st.button("⚡ Start Batch Verification", type="primary", use_container_width=True):
         if not claims_to_check:
             st.warning("⚠️ No claims to verify. Please upload a file or paste statements.")
-        elif not active_api_key:
-            st.error("⚠️ Tavily Search API Key is missing. Please enter your API key in the sidebar.")
         else:
             prog_bar = st.progress(0.0)
             status_text = st.empty()
@@ -906,7 +886,6 @@ with tab_batch:
                     nli_model=nli_model,
                     confidence_threshold=confidence_thresh,
                     max_results=max_search_results,
-                    api_key=active_api_key,
                     progress_callback=update_progress
                 )
 
