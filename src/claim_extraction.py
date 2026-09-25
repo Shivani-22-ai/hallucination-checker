@@ -3,9 +3,15 @@ import re
 VERB_LIST = [
     "is", "was", "are", "were", "has", "have", "had", "won", "built",
     "discovered", "created", "developed", "designed", "composed",
-    "written", "located", "died", "lived", "founded", "released", "stands"
+    "written", "located", "died", "lived", "founded", "released", "stands",
+    "orbits", "invented", "authored", "directed", "synthesized", "calculated",
+    "established", "contains", "consists", "produces", "generates", "published",
+    "defeated", "weighs", "measured", "cost", "costs", "serves", "began",
+    "ended", "started", "formed", "joined", "rules", "ruled", "elected",
+    "became", "produces", "contains", "cured", "patented", "identified"
 ]
 VERB_PATTERN = r"(?:" + "|".join(VERB_LIST) + r")"
+
 
 
 def clean_sentence(text):

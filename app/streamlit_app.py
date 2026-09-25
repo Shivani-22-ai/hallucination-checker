@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import re
 import html
+import io
 import pandas as pd
 import streamlit as st
 
@@ -14,13 +15,14 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.retrieval import load_embedding_model
 from src.nli_checker import load_nli_model
-from src.pipeline import analyze_answer, verify_claim
+from src.pipeline import analyze_answer, verify_claim, batch_verify_claims
+from src.web_search import get_tavily_api_key
 
 # --------------------------------------------------
 # Streamlit Page Configuration
 # --------------------------------------------------
 st.set_page_config(
-    page_title="FactCheck AI — LLM Factual Consistency Engine",
+    page_title="FactCheck AI — Universal LLM Factual Consistency Engine",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -67,18 +69,6 @@ render_html(
         backdrop-filter: blur(12px);
         position: relative;
         overflow: hidden;
-    }
-
-    .hero-container::before {
-        content: "";
-        position: absolute;
-        top: -50%;
-        right: -20%;
-        width: 300px;
-        height: 300px;
-        background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
-        border-radius: 50%;
-        pointer-events: none;
     }
 
     .hero-badge {
@@ -416,7 +406,7 @@ render_html(
         color: #1d4ed8;
     }
 
-    /* Step Pipeline styling for About tab */
+    /* Step Pipeline styling */
     .step-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
@@ -474,7 +464,7 @@ def load_cached_models():
     return emb, nli
 
 # --------------------------------------------------
-# Sidebar: System Architecture & Controls
+# Sidebar: Dynamic API Key, Parameters & Architecture
 # --------------------------------------------------
 with st.sidebar:
     render_html(
@@ -483,23 +473,38 @@ with st.sidebar:
             <div style="font-size: 1.8rem;">🛡️</div>
             <div>
                 <div style="font-size: 1.25rem; font-weight:800; color:#0f172a; line-height:1.2;">FactCheck AI</div>
-                <div style="font-size: 0.75rem; font-weight:600; color:#2563eb; letter-spacing:0.05em; text-transform:uppercase;">v2.0 • Production Engine</div>
+                <div style="font-size: 0.75rem; font-weight:600; color:#2563eb; letter-spacing:0.05em; text-transform:uppercase;">Universal Fact Engine</div>
             </div>
         </div>
         """
     )
     
+    # Check if API key exists in environment / secrets
+    existing_key = get_tavily_api_key()
+    key_status_text = "🟢 Key Active" if existing_key else "🟡 Key Required"
+    key_status_bg = "#f0fdf4" if existing_key else "#fffbeb"
+    key_status_color = "#166534" if existing_key else "#b45309"
+
     render_html(
-        """
-        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 10px; margin: 0.6rem 0 1rem 0; display:flex; align-items:center; gap:6px;">
-            <span style="width:8px; height:8px; border-radius:50%; background:#10b981; display:inline-block;"></span>
-            <span style="font-size:0.78rem; font-weight:700; color:#166534;">DeBERTa-v3 & Tavily Live</span>
+        f"""
+        <div style="background: {key_status_bg}; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; margin: 0.4rem 0 0.8rem 0; display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:0.78rem; font-weight:700; color:{key_status_color};">{key_status_text}</span>
+            <span style="font-size:0.74rem; color:#64748b;">Live Web Search</span>
         </div>
         """
     )
 
+    custom_tavily_key = st.text_input(
+        "Tavily Search API Key (Optional Override):",
+        type="password",
+        placeholder="tvly-xxxxxxxxxxxx",
+        help="If deploying publicly without .env or Streamlit Secrets, paste your Tavily API key here."
+    )
+
+    active_api_key = custom_tavily_key if custom_tavily_key.strip() else existing_key
+
     st.markdown("---")
-    st.markdown("#### ⚙️ Pipeline Parameters")
+    st.markdown("#### ⚙️ Verification Parameters")
 
     confidence_thresh = st.slider(
         "NLI Entailment Threshold",
@@ -523,7 +528,7 @@ with st.sidebar:
     st.markdown("#### 🎯 Verified Benchmark KPIs")
     st.markdown(
         """
-        - 🎯 **Overall Accuracy**: **88.00%** (22/25)
+        - 🎯 **Benchmark Accuracy**: **88.00%** (22/25)
         - 🟢 **Supported Recall**: **100.0%** (10/10)
         - 🔴 **Contradicted Recall**: **100.0%** (10/10)
         - ⚖️ **Weighted Precision**: **90.77%**
@@ -531,17 +536,7 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("#### 🔬 Core Neural Models")
-    st.markdown(
-        """
-        - **Embedding**: `all-MiniLM-L6-v2`
-        - **NLI Cross-Encoder**: `nli-deberta-v3-small`
-        - **Live Search**: Tavily High-Precision API
-        """
-    )
-
-    st.markdown("---")
-    st.caption("FactCheck AI • Hallucination Verification Suite")
+    st.caption("FactCheck AI • Production-Ready Hallucination Verification")
 
 # --------------------------------------------------
 # Main Hero Header
@@ -549,17 +544,17 @@ with st.sidebar:
 render_html(
     """
     <div class="hero-container">
-        <div class="hero-badge">⚡ Real-Time Fact Verification</div>
+        <div class="hero-badge">⚡ Real-Time Universal Verification</div>
         <h1 class="hero-title">FactCheck AI</h1>
         <p class="hero-subtitle">
-            Detect LLM hallucinations and verify factual accuracy in real time with automated atomic claim decomposition, authoritative live web evidence retrieval, and neural Natural Language Inference (NLI).
+            Verify any factual statement, AI response, or bulk dataset across medicine, history, science, pop culture, and news using live web evidence retrieval, semantic embedding cosine ranking, and cross-encoder Natural Language Inference.
         </p>
         <div class="pill-tags">
             <span class="tech-pill">🧠 DeBERTa-v3 NLI</span>
-            <span class="tech-pill">🌐 Tavily Live Web API</span>
+            <span class="tech-pill">🌐 Tavily Live Web Search</span>
             <span class="tech-pill">📐 MiniLM Semantic Embeddings</span>
+            <span class="tech-pill">📂 Universal Batch Verification</span>
             <span class="tech-pill">🎯 88% Benchmark Accuracy</span>
-            <span class="tech-pill">⚡ Zero-Hallucination Guardrails</span>
         </div>
     </div>
     """
@@ -568,55 +563,60 @@ render_html(
 # --------------------------------------------------
 # Tabs Navigation
 # --------------------------------------------------
-tab_verify, tab_eval, tab_about = st.tabs([
-    "🔍 Verify AI Answer",
-    "📊 Evaluation Benchmark",
+tab_verify, tab_batch, tab_eval, tab_deploy, tab_about = st.tabs([
+    "🔍 Verify Any Text / Answer",
+    "📂 Bulk / CSV Claim Checker",
+    "📊 Benchmark Dashboard",
+    "🚀 Deployment Guide",
     "🧠 System Architecture"
 ])
 
 # --------------------------------------------------
-# TAB 1: Main Verification Tool
+# TAB 1: Main Dynamic Verification Tool
 # --------------------------------------------------
 with tab_verify:
     if "input_text_val" not in st.session_state:
         st.session_state.input_text_val = ""
 
-    render_html('<div class="preset-header">💡 Quick Test Presets (Click to load scenario):</div>')
+    render_html('<div class="preset-header">💡 Multi-Domain Test Presets (Click to test across domains):</div>')
 
-    col_ex1, col_ex2, col_ex3, col_ex4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
-    with col_ex1:
-        if st.button("🏛️ Mixed Hallucination\n\n*Eiffel Tower in London*", use_container_width=True):
+    with c1:
+        if st.button("🏛️ History & Architecture\n\n*Eiffel Tower & Capital*", use_container_width=True):
             st.session_state.input_text_val = (
-                "The Eiffel Tower was completed in 1889 and is located in London."
+                "The Eiffel Tower was completed in 1889 and is located in London. "
+                "Paris is the capital of France."
             )
 
-    with col_ex2:
-        if st.button("🔭 Space Telescope\n\n*JWST Launch & Discoveries*", use_container_width=True):
+    with c2:
+        if st.button("🧬 Medicine & Biology\n\n*Penicillin & Heart*", use_container_width=True):
+            st.session_state.input_text_val = (
+                "Penicillin was discovered by Alexander Fleming in 1928. "
+                "The human heart has 6 chambers and pumps blood throughout the body."
+            )
+
+    with c3:
+        if st.button("🎬 Cinema & Pop Culture\n\n*Oppenheimer & Oscars*", use_container_width=True):
+            st.session_state.input_text_val = (
+                "The movie Oppenheimer was directed by Christopher Nolan. "
+                "Oppenheimer won the Academy Award for Best Picture in 2024."
+            )
+
+    with c4:
+        if st.button("🔬 Astronomy & Physics\n\n*James Webb & Orbit*", use_container_width=True):
             st.session_state.input_text_val = (
                 "The James Webb Space Telescope was launched in 2021. "
-                "It discovered exactly 7,432 galaxies in its first year."
-            )
-
-    with col_ex3:
-        if st.button("🐍 Tech Origin\n\n*Python & Creator*", use_container_width=True):
-            st.session_state.input_text_val = (
-                "Python is a high-level programming language. Python was created by Microsoft in 2005."
-            )
-
-    with col_ex4:
-        if st.button("🔬 Solar & Physics\n\n*Orbit & Freezing Point*", use_container_width=True):
-            st.session_state.input_text_val = (
-                "The Earth orbits the Sun. Water freezes at 0 degrees Celsius at standard atmospheric pressure."
+                "The Earth orbits the Sun once every 365.25 days."
             )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     user_input = st.text_area(
-        "Enter or paste the AI-generated text to verify:",
+        "Enter or paste any AI-generated response, article excerpt, or statement to verify:",
         value=st.session_state.input_text_val,
         height=130,
-        placeholder="Paste any factual text or LLM generation here (e.g. 'Paris is the capital of France and has a population of 100 million.')...",
+        placeholder="Type or paste any arbitrary statement across any domain (e.g. 'Albert Einstein won the Nobel Prize in Physics for the photoelectric effect. Marie Curie was born in Poland.')...",
         key="user_text_area"
     )
 
@@ -630,18 +630,23 @@ with tab_verify:
 
     if verify_clicked:
         if not user_input.strip():
-            st.warning("⚠️ Please provide text to analyze or select one of the quick test presets above.")
+            st.warning("⚠️ Please provide text to analyze or select one of the multi-domain presets above.")
+        elif not active_api_key:
+            st.error("⚠️ Tavily Search API Key is missing. Please enter your API key in the sidebar.")
         else:
-            with st.spinner("🔍 Decomposing claims, querying live web evidence, and running NLI cross-encoder..."):
+            with st.spinner("🔍 Decomposing text into atomic claims, querying live web evidence, and ranking NLI inference..."):
                 emb_model, nli_model = load_cached_models()
                 results, summary = analyze_answer(
                     answer_text=user_input,
                     embedding_model=emb_model,
-                    nli_model=nli_model
+                    nli_model=nli_model,
+                    confidence_threshold=confidence_thresh,
+                    max_results=max_search_results,
+                    api_key=active_api_key
                 )
 
             if not results:
-                st.warning("⚠️ No verifiable factual claims could be extracted from the input.")
+                st.warning("⚠️ No verifiable factual claims could be extracted from the input text.")
             else:
                 score = summary["consistency_score"]
                 total = summary["total_claims"]
@@ -649,7 +654,6 @@ with tab_verify:
                 n_cont = summary["contradicted"]
                 n_unv = summary["unverifiable"]
 
-                # Consistency Score banner styling
                 if score >= 80:
                     dial_class = "score-dial-high"
                     score_title = "High Factual Consistency"
@@ -677,7 +681,6 @@ with tab_verify:
                     """
                 )
 
-                # 4-Column Stat Cards
                 render_html(
                     f"""
                     <div class="stats-card-grid">
@@ -797,7 +800,6 @@ with tab_verify:
                     """
                     render_html(card_markup)
 
-                    # Candidate Passages Inspector
                     all_cands = r.get("all_results", [])
                     if len(all_cands) > 1:
                         with st.expander(f"🔍 Inspect {len(all_cands)} alternative web candidate passages for Claim #{i}"):
@@ -824,12 +826,140 @@ with tab_verify:
                                 render_html(cand_markup)
 
 # --------------------------------------------------
-# TAB 2: Evaluation Benchmark Dashboard
+# TAB 2: Dynamic Bulk / CSV Claim Verification
+# --------------------------------------------------
+with tab_batch:
+    st.markdown("### 📂 Bulk Claim Verification & Dataset Processing")
+    st.markdown(
+        "Upload a `.csv` or `.txt` dataset containing arbitrary factual claims or paste a list of statements to batch-verify them simultaneously."
+    )
+
+    batch_mode = st.radio("Choose Input Mode:", ["📁 Upload CSV / TXT File", "📝 Paste List of Claims"], horizontal=True)
+
+    claims_to_check = []
+
+    if batch_mode == "📁 Upload CSV / TXT File":
+        uploaded_file = st.file_uploader(
+            "Upload CSV or TXT file:",
+            type=["csv", "txt"],
+            help="CSV files should have a column named 'claim', 'statement', or 'text'. TXT files should have one claim per line."
+        )
+
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df_upload = pd.read_csv(uploaded_file)
+                    # Find matching column
+                    candidates = ["claim", "statement", "text", "sentence", "question", "prompt"]
+                    matched_col = None
+                    for col in df_upload.columns:
+                        if col.lower().strip() in candidates:
+                            matched_col = col
+                            break
+                    if matched_col is None:
+                        matched_col = df_upload.columns[0]
+                    
+                    st.success(f"Loaded {len(df_upload)} records from column: `{matched_col}`")
+                    claims_to_check = df_upload[matched_col].dropna().astype(str).tolist()
+                else:
+                    content = uploaded_file.read().decode("utf-8")
+                    claims_to_check = [line.strip() for line in content.splitlines() if line.strip()]
+                    st.success(f"Loaded {len(claims_to_check)} statements from text file.")
+            except Exception as e:
+                st.error(f"Error parsing uploaded file: {e}")
+
+    else:
+        sample_batch_text = (
+            "The Eiffel Tower was completed in 1889.\n"
+            "Paris is the capital of Germany.\n"
+            "Penicillin was discovered by Alexander Fleming in 1928.\n"
+            "Python was created by Microsoft.\n"
+            "The human skeleton has 206 bones in adulthood.\n"
+            "Mount Everest is the highest mountain above sea level on Earth."
+        )
+        pasted_text = st.text_area(
+            "Paste statements (one per line):",
+            value=sample_batch_text,
+            height=140
+        )
+        claims_to_check = [line.strip() for line in pasted_text.splitlines() if line.strip()]
+
+    st.markdown(f"**Selected Claims Count:** `{len(claims_to_check)}`")
+
+    if st.button("⚡ Start Batch Verification", type="primary", use_container_width=True):
+        if not claims_to_check:
+            st.warning("⚠️ No claims to verify. Please upload a file or paste statements.")
+        elif not active_api_key:
+            st.error("⚠️ Tavily Search API Key is missing. Please enter your API key in the sidebar.")
+        else:
+            prog_bar = st.progress(0.0)
+            status_text = st.empty()
+
+            def update_progress(current, total, claim, verdict):
+                frac = current / total
+                prog_bar.progress(frac)
+                status_text.markdown(f"**Verifying [{current}/{total}]:** `{claim[:60]}...` → **{verdict}**")
+
+            emb_model, nli_model = load_cached_models()
+            with st.spinner("Processing batch claim verification..."):
+                records, b_summary = batch_verify_claims(
+                    claims_list=claims_to_check,
+                    embedding_model=emb_model,
+                    nli_model=nli_model,
+                    confidence_threshold=confidence_thresh,
+                    max_results=max_search_results,
+                    api_key=active_api_key,
+                    progress_callback=update_progress
+                )
+
+            prog_bar.progress(1.0)
+            status_text.success("✅ Batch verification complete!")
+
+            # Summary metrics
+            render_html(
+                f"""
+                <div class="stats-card-grid">
+                    <div class="stat-card stat-total">
+                        <div class="stat-value">{b_summary['total']}</div>
+                        <div class="stat-label">Total Verified</div>
+                    </div>
+                    <div class="stat-card stat-supported">
+                        <div class="stat-value" style="color:#059669;">{b_summary['supported']}</div>
+                        <div class="stat-label">🟢 Supported ({b_summary['consistency_score']:.1f}%)</div>
+                    </div>
+                    <div class="stat-card stat-contradicted">
+                        <div class="stat-value" style="color:#dc2626;">{b_summary['contradicted']}</div>
+                        <div class="stat-label">🔴 Contradicted</div>
+                    </div>
+                    <div class="stat-card stat-unverifiable">
+                        <div class="stat-value" style="color:#d97706;">{b_summary['unverifiable']}</div>
+                        <div class="stat-label">🟡 Unverifiable</div>
+                    </div>
+                </div>
+                """
+            )
+
+            res_df = pd.DataFrame(records)
+            st.dataframe(res_df, use_container_width=True, hide_index=True)
+
+            # Download CSV button
+            csv_buffer = io.StringIO()
+            res_df.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="📥 Download Batch Results as CSV",
+                data=csv_buffer.getvalue(),
+                file_name="factcheck_batch_results.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
+# --------------------------------------------------
+# TAB 3: Evaluation Benchmark Dashboard
 # --------------------------------------------------
 with tab_eval:
     st.markdown("### 📊 Benchmark Evaluation Dataset & Live Metrics")
     st.markdown(
-        "FactCheck AI is rigorously evaluated on a curated benchmark of **25 factual claims** spanning supported facts, explicit contradictions, and unverifiable statements across multiple domains."
+        "FactCheck AI is benchmarked on a curated test set of **25 ground-truth claims** across science, geography, history, medicine, and technology."
     )
 
     eval_file = ROOT_DIR / "data" / "evaluation_results.csv"
@@ -843,7 +973,6 @@ with tab_eval:
         total = len(eval_df)
         acc = (correct / total) * 100
 
-        # High level metric cards
         render_html(
             f"""
             <div class="stats-card-grid">
@@ -890,7 +1019,6 @@ with tab_eval:
         if search_query.strip():
             display_df = display_df[display_df["claim"].str.contains(search_query, case=False, na=False)]
 
-        # Display formatted table
         table_rows = []
         for _, row in display_df.iterrows():
             is_match = str(row["label"]).lower().strip() == str(row["prediction"]).lower().strip()
@@ -916,7 +1044,59 @@ with tab_eval:
         st.info("Run `python -m src.evaluate` to generate the benchmark metrics file.")
 
 # --------------------------------------------------
-# TAB 3: System Architecture & NLP Deep Dive
+# TAB 4: Cloud Deployment Guide
+# --------------------------------------------------
+with tab_deploy:
+    st.markdown("### 🚀 How to Deploy FactCheck AI to the Cloud")
+    st.markdown(
+        "FactCheck AI is lightweight and production-ready. You can deploy it for free using any of the following options:"
+    )
+
+    st.markdown("#### Option 1: Streamlit Community Cloud (Recommended & Free)")
+    st.markdown(
+        """
+        1. **Push your code to GitHub** (already configured on branch `main`).
+        2. Go to **[share.streamlit.io](https://share.streamlit.io)** and log in with your GitHub account.
+        3. Click **"New App"** and select:
+           - **Repository**: `Shivani-22-ai/hallucination-checker`
+           - **Branch**: `main`
+           - **Main file path**: `app/streamlit_app.py`
+        4. In **Advanced Settings → Secrets**, add your Tavily API Key:
+           ```toml
+           TAVILY_API_KEY = "tvly-your-api-key-here"
+           ```
+        5. Click **Deploy**! Your app will be live with a public URL in ~2 minutes.
+        """
+    )
+
+    st.markdown("---")
+    st.markdown("#### Option 2: Hugging Face Spaces (Free)")
+    st.markdown(
+        """
+        1. Create a new Space at **[huggingface.co/spaces](https://huggingface.co/spaces)**.
+        2. Select **Streamlit** as the Space SDK.
+        3. Push this repository to your Hugging Face Space git remote.
+        4. In **Settings → Variables and Secrets**, add `TAVILY_API_KEY`.
+        """
+    )
+
+    st.markdown("---")
+    st.markdown("#### Option 3: Docker / Render / Cloud Run")
+    st.markdown(
+        """
+        Build and run the container locally or on any cloud container host:
+        ```bash
+        # Build Docker image
+        docker build -t factcheck-ai .
+
+        # Run container
+        docker run -p 8501:8501 -e TAVILY_API_KEY="your-key" factcheck-ai
+        ```
+        """
+    )
+
+# --------------------------------------------------
+# TAB 5: System Architecture & NLP Deep Dive
 # --------------------------------------------------
 with tab_about:
     st.markdown("### 🧠 FactCheck AI — System Architecture")

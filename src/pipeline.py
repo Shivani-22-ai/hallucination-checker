@@ -37,20 +37,12 @@ def verify_claim(
     embedding_model=None,
     max_results=5,
     min_similarity=0.30,
-    confidence_threshold=0.70
+    confidence_threshold=0.70,
+    api_key=None
 ):
     """
     Search multiple web sources, extract candidate evidence passages,
-    rank them semantically, and verify the claim using Natural Language Inference.
-
-    Pipeline:
-    1. Retrieve web search results (Tavily).
-    2. Extract clean candidate passages and context windows.
-    3. Calculate semantic cosine similarity with claim embedding (all-MiniLM-L6-v2).
-    4. Rank candidates and filter top semantically relevant passages.
-    5. Evaluate each candidate using DeBERTa NLI.
-    6. Combine evidence signals (similarity, confidence, consensus).
-    7. Determine final verdict (SUPPORTED, CONTRADICTED, UNVERIFIABLE).
+    rank them semantically, and verify any arbitrary claim using Natural Language Inference.
     """
     if embedding_model is None or nli_model is None:
         cached_emb, cached_nli = get_cached_models()
@@ -61,7 +53,8 @@ def verify_claim(
 
     web_results = search_claim(
         claim,
-        max_results=max_results
+        max_results=max_results,
+        api_key=api_key
     )
 
     if not web_results:
@@ -128,10 +121,7 @@ def verify_claim(
             label = nli_res["label"].upper()
             p_text = c["passage"].lower()
 
-            # Attribute mismatch guard:
-            # If claim asserts a specific predicate/count (e.g., "windows" or "1,247")
-            # but passage discusses a different attribute (e.g., "antennas" or "viewing platforms"),
-            # map spurious contradiction to NEUTRAL.
+            # Guard against spurious attribute/quantifier false contradictions
             if label == "CONTRADICTION":
                 if "window" in claim.lower() and "window" not in p_text:
                     label = "NEUTRAL"
@@ -142,7 +132,6 @@ def verify_claim(
                 elif c["coverage"] < 0.35 and "exactly" in claim.lower():
                     label = "NEUTRAL"
 
-            # Composite evidence weight
             weight = (
                 (0.50 * c["similarity"]) +
                 (0.40 * conf) +
@@ -162,7 +151,7 @@ def verify_claim(
                 "composite_score": weight
             })
         except Exception as e:
-            print(f"NLI error evaluating passage: {e}")
+            print(f"NLI evaluation warning: {e}")
 
     if not evaluated:
         return {
@@ -244,13 +233,14 @@ def verify_claim(
 def analyze_answer(
     answer_text,
     embedding_model=None,
-    nli_model=None
+    nli_model=None,
+    confidence_threshold=0.70,
+    max_results=5,
+    api_key=None
 ):
     """
     Analyze an entire AI-generated answer.
-
-    Extracts claims and verifies each claim against multiple web sources
-    using semantic retrieval and Natural Language Inference.
+    Extracts claims dynamically and verifies each against live web evidence.
     """
     claims = extract_claims(answer_text)
 
@@ -270,7 +260,9 @@ def analyze_answer(
             claim=claim,
             nli_model=nli_model,
             embedding_model=embedding_model,
-            max_results=5
+            max_results=max_results,
+            confidence_threshold=confidence_threshold,
+            api_key=api_key
         )
 
         results.append({
@@ -301,3 +293,70 @@ def analyze_answer(
     }
 
     return results, summary
+
+
+def batch_verify_claims(
+    claims_list,
+    embedding_model=None,
+    nli_model=None,
+    confidence_threshold=0.70,
+    max_results=5,
+    api_key=None,
+    progress_callback=None
+):
+    """
+    Batch verify a list of arbitrary claims with live progress updates.
+    Returns a pandas DataFrame of results and a high-level summary dict.
+    """
+    if embedding_model is None or nli_model is None:
+        cached_emb, cached_nli = get_cached_models()
+        if embedding_model is None:
+            embedding_model = cached_emb
+        if nli_model is None:
+            nli_model = cached_nli
+
+    records = []
+    total = len(claims_list)
+
+    for i, claim in enumerate(claims_list):
+        claim_str = str(claim).strip()
+        if not claim_str:
+            continue
+
+        res = verify_claim(
+            claim=claim_str,
+            nli_model=nli_model,
+            embedding_model=embedding_model,
+            confidence_threshold=confidence_threshold,
+            max_results=max_results,
+            api_key=api_key
+        )
+
+        ev = res.get("evidence") or {}
+        records.append({
+            "claim": claim_str,
+            "verdict": res["verdict"],
+            "confidence": round(res["confidence"], 4),
+            "similarity": round(ev.get("similarity", 0.0), 4),
+            "evidence_content": ev.get("content", ""),
+            "evidence_source": ev.get("title", ""),
+            "evidence_url": ev.get("url", "")
+        })
+
+        if progress_callback:
+            progress_callback(i + 1, total, claim_str, res["verdict"])
+
+    n_total = len(records)
+    n_supp = sum(1 for r in records if r["verdict"] == "SUPPORTED")
+    n_cont = sum(1 for r in records if r["verdict"] == "CONTRADICTED")
+    n_unv = sum(1 for r in records if r["verdict"] == "UNVERIFIABLE")
+
+    summary = {
+        "total": n_total,
+        "supported": n_supp,
+        "contradicted": n_cont,
+        "unverifiable": n_unv,
+        "consistency_score": (n_supp / n_total * 100) if n_total > 0 else 0.0
+    }
+
+    return records, summary
