@@ -17,16 +17,31 @@ def get_tavily_api_key(override_key: str = None) -> str:
     if override_key and override_key.strip():
         return override_key.strip()
     
-    # Check environment variable
-    key = os.getenv("TAVILY_API_KEY")
-    if key and key.strip():
-        return key.strip()
+    # 1. Check environment variables
+    for env_var in ["TAVILY_API_KEY", "tavily_api_key", "TAVILY_KEY", "tavily_key"]:
+        key = os.getenv(env_var)
+        if key and key.strip():
+            return key.strip()
     
-    # Check Streamlit secrets if running in Streamlit Cloud / local Streamlit
+    # 2. Check Streamlit secrets (Streamlit Cloud & local .streamlit/secrets.toml)
     try:
         import streamlit as st
-        if "TAVILY_API_KEY" in st.secrets:
-            return str(st.secrets["TAVILY_API_KEY"]).strip()
+        # Check standard root-level keys
+        for secret_name in ["TAVILY_API_KEY", "tavily_api_key", "TAVILY_KEY", "tavily_key", "API_KEY"]:
+            if secret_name in st.secrets:
+                val = st.secrets[secret_name]
+                if val and str(val).strip():
+                    return str(val).strip()
+        
+        # Check nested dictionary secrets (e.g., [tavily] api_key = "...")
+        if "tavily" in st.secrets:
+            sec_tavily = st.secrets["tavily"]
+            if isinstance(sec_tavily, dict):
+                for sub_name in ["api_key", "API_KEY", "key", "KEY", "tavily_api_key"]:
+                    if sub_name in sec_tavily:
+                        val = sec_tavily[sub_name]
+                        if val and str(val).strip():
+                            return str(val).strip()
     except Exception:
         pass
     

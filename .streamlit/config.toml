@@ -1,5 +1,6 @@
 [server]
 headless = true
+fileWatcherType = "none"
 enableCORS = false
 enableXsrfProtection = true
 maxUploadSize = 50

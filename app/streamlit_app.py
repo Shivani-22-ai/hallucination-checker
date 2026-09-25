@@ -615,24 +615,53 @@ with tab_verify:
         if not user_input.strip():
             st.warning("⚠️ Please provide text to analyze or select one of the multi-domain presets above.")
         else:
-            with st.spinner("🔍 Decomposing text into atomic claims, querying live web evidence, and ranking NLI inference..."):
-                emb_model, nli_model = load_cached_models()
-                results, summary = analyze_answer(
-                    answer_text=user_input,
-                    embedding_model=emb_model,
-                    nli_model=nli_model,
-                    confidence_threshold=confidence_thresh,
-                    max_results=max_search_results
-                )
+            api_key = get_tavily_api_key()
+            if not api_key:
+                st.error(
+                    """
+                    ### 🔑 Tavily Search API Key Required
 
-            if not results:
-                st.warning("⚠️ No verifiable factual claims could be extracted from the input text.")
+                    To verify claims against real-time live web evidence, a **Tavily API Key** is needed.
+
+                    **How to configure on Streamlit Community Cloud:**
+                    1. In your deployed app, click **Manage app** (bottom-right) or the `⋮` menu (top-right).
+                    2. Go to **Settings** ⚙️ ➔ **Secrets**.
+                    3. Paste your key:
+                    ```toml
+                    TAVILY_API_KEY = "tvly-your-tavily-api-key"
+                    ```
+                    4. Click **Save**. The app will automatically reload!
+
+                    *(Get a free API key at [tavily.com](https://tavily.com) — includes 1,000 free monthly searches)*
+                    """
+                )
             else:
-                score = summary["consistency_score"]
-                total = summary["total_claims"]
-                n_supp = summary["supported"]
-                n_cont = summary["contradicted"]
-                n_unv = summary["unverifiable"]
+                results = None
+                summary = None
+                try:
+                    with st.spinner("🔍 Decomposing text into atomic claims, querying live web evidence, and ranking NLI inference..."):
+                        emb_model, nli_model = load_cached_models()
+                        results, summary = analyze_answer(
+                            answer_text=user_input,
+                            embedding_model=emb_model,
+                            nli_model=nli_model,
+                            confidence_threshold=confidence_thresh,
+                            max_results=max_search_results,
+                            api_key=api_key
+                        )
+                except Exception as e:
+                    st.error(f"❌ Verification encountered an error: {e}")
+                    st.info("💡 Please ensure that your `TAVILY_API_KEY` is configured in Streamlit Cloud Secrets (or local `.env`) and has remaining search quota.")
+
+                if results is not None:
+                    if not results:
+                        st.warning("⚠️ No verifiable factual claims could be extracted from the input text.")
+                    else:
+                        score = summary["consistency_score"]
+                        total = summary["total_claims"]
+                        n_supp = summary["supported"]
+                        n_cont = summary["contradicted"]
+                        n_unv = summary["unverifiable"]
 
                 if score >= 80:
                     dial_class = "score-dial-high"
@@ -870,65 +899,82 @@ with tab_batch:
         if not claims_to_check:
             st.warning("⚠️ No claims to verify. Please upload a file or paste statements.")
         else:
-            prog_bar = st.progress(0.0)
-            status_text = st.empty()
+            api_key = get_tavily_api_key()
+            if not api_key:
+                st.error(
+                    """
+                    ### 🔑 Tavily Search API Key Required
 
-            def update_progress(current, total, claim, verdict):
-                frac = current / total
-                prog_bar.progress(frac)
-                status_text.markdown(f"**Verifying [{current}/{total}]:** `{claim[:60]}...` → **{verdict}**")
-
-            emb_model, nli_model = load_cached_models()
-            with st.spinner("Processing batch claim verification..."):
-                records, b_summary = batch_verify_claims(
-                    claims_list=claims_to_check,
-                    embedding_model=emb_model,
-                    nli_model=nli_model,
-                    confidence_threshold=confidence_thresh,
-                    max_results=max_search_results,
-                    progress_callback=update_progress
+                    To run batch verification against live web evidence, please add your **TAVILY_API_KEY** in Streamlit Cloud **App Settings ➔ Secrets**:
+                    ```toml
+                    TAVILY_API_KEY = "tvly-your-tavily-api-key"
+                    ```
+                    """
                 )
+            else:
+                try:
+                    prog_bar = st.progress(0.0)
+                    status_text = st.empty()
 
-            prog_bar.progress(1.0)
-            status_text.success("✅ Batch verification complete!")
+                    def update_progress(current, total, claim, verdict):
+                        frac = current / total
+                        prog_bar.progress(frac)
+                        status_text.markdown(f"**Verifying [{current}/{total}]:** `{claim[:60]}...` → **{verdict}**")
 
-            # Summary metrics
-            render_html(
-                f"""
-                <div class="stats-card-grid">
-                    <div class="stat-card stat-total">
-                        <div class="stat-value">{b_summary['total']}</div>
-                        <div class="stat-label">Total Verified</div>
-                    </div>
-                    <div class="stat-card stat-supported">
-                        <div class="stat-value" style="color:#059669;">{b_summary['supported']}</div>
-                        <div class="stat-label">🟢 Supported ({b_summary['consistency_score']:.1f}%)</div>
-                    </div>
-                    <div class="stat-card stat-contradicted">
-                        <div class="stat-value" style="color:#dc2626;">{b_summary['contradicted']}</div>
-                        <div class="stat-label">🔴 Contradicted</div>
-                    </div>
-                    <div class="stat-card stat-unverifiable">
-                        <div class="stat-value" style="color:#d97706;">{b_summary['unverifiable']}</div>
-                        <div class="stat-label">🟡 Unverifiable</div>
-                    </div>
-                </div>
-                """
-            )
+                    emb_model, nli_model = load_cached_models()
+                    with st.spinner("Processing batch claim verification..."):
+                        records, b_summary = batch_verify_claims(
+                            claims_list=claims_to_check,
+                            embedding_model=emb_model,
+                            nli_model=nli_model,
+                            confidence_threshold=confidence_thresh,
+                            max_results=max_search_results,
+                            api_key=api_key,
+                            progress_callback=update_progress
+                        )
 
-            res_df = pd.DataFrame(records)
-            st.dataframe(res_df, use_container_width=True, hide_index=True)
+                    prog_bar.progress(1.0)
+                    status_text.success("✅ Batch verification complete!")
 
-            # Download CSV button
-            csv_buffer = io.StringIO()
-            res_df.to_csv(csv_buffer, index=False)
-            st.download_button(
-                label="📥 Download Batch Results as CSV",
-                data=csv_buffer.getvalue(),
-                file_name="factcheck_batch_results.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+                    # Summary metrics
+                    render_html(
+                        f"""
+                        <div class="stats-card-grid">
+                            <div class="stat-card stat-total">
+                                <div class="stat-value">{b_summary['total']}</div>
+                                <div class="stat-label">Total Verified</div>
+                            </div>
+                            <div class="stat-card stat-supported">
+                                <div class="stat-value" style="color:#059669;">{b_summary['supported']}</div>
+                                <div class="stat-label">🟢 Supported ({b_summary['consistency_score']:.1f}%)</div>
+                            </div>
+                            <div class="stat-card stat-contradicted">
+                                <div class="stat-value" style="color:#dc2626;">{b_summary['contradicted']}</div>
+                                <div class="stat-label">🔴 Contradicted</div>
+                            </div>
+                            <div class="stat-card stat-unverifiable">
+                                <div class="stat-value" style="color:#d97706;">{b_summary['unverifiable']}</div>
+                                <div class="stat-label">🟡 Unverifiable</div>
+                            </div>
+                        </div>
+                        """
+                    )
+
+                    res_df = pd.DataFrame(records)
+                    st.dataframe(res_df, use_container_width=True, hide_index=True)
+
+                    # Download CSV button
+                    csv_buffer = io.StringIO()
+                    res_df.to_csv(csv_buffer, index=False)
+                    st.download_button(
+                        label="📥 Download Batch Results as CSV",
+                        data=csv_buffer.getvalue(),
+                        file_name="factcheck_batch_results.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"❌ Batch verification encountered an error: {e}")
 
 # --------------------------------------------------
 # TAB 3: Evaluation Benchmark Dashboard
