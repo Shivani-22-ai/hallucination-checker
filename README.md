@@ -64,38 +64,6 @@ Tested on a curated multi-domain benchmark test set:
 
 ---
 
-## 🚀 Deployment Guide
-
-### Option 1: Streamlit Community Cloud (Recommended & Free)
-1. Fork or push this repository to GitHub: `https://github.com/Shivani-22-ai/hallucination-checker.git`
-2. Go to **[share.streamlit.io](https://share.streamlit.io)** and log in with GitHub.
-3. Click **"New App"** and select:
-   - **Repository**: `Shivani-22-ai/hallucination-checker`
-   - **Branch**: `main`
-   - **Main file path**: `app/streamlit_app.py`
-4. In **Advanced Settings → Secrets**, add:
-   ```toml
-   TAVILY_API_KEY = "your-tavily-api-key"
-   ```
-5. Click **Deploy**. Your app will be live on a public URL in 2 minutes!
-
-### Option 2: Hugging Face Spaces (Free)
-1. Create a Space at **[huggingface.co/spaces](https://huggingface.co/spaces)**.
-2. Select **Streamlit** as the SDK.
-3. Push the codebase to the Space git remote.
-4. In **Settings → Secrets**, set `TAVILY_API_KEY`.
-
-### Option 3: Docker Deployment
-```bash
-# Build the Docker image
-docker build -t factcheck-ai .
-
-# Run container with API key
-docker run -p 8501:8501 -e TAVILY_API_KEY="your-tavily-api-key" factcheck-ai
-```
-
----
-
 ## 💻 Local Installation & Setup
 
 ```bash
